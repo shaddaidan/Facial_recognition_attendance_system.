@@ -1,11 +1,19 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request
 import os
 import base64
+import time
+import pickle
+import face_recognition
+import pandas as pd
+from datetime import datetime
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REGISTER_FOLDER = os.path.join(BASE_DIR, 'register')
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'attendance_uploads')
+ENCODING_FILE = os.path.join(BASE_DIR, 'data', 'face_encodings.pkl')
+ATTENDANCE_LOG = os.path.join(BASE_DIR, 'data', 'attendance.csv')
 
 @app.route('/')
 def home():
@@ -14,18 +22,60 @@ def home():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        student_name = request.form['name']
-        image_data = request.form['captured_image']
-        
-        # Extract base64 and decode
-        image_data = image_data.split(',')[1]
-        image_bytes = base64.b64decode(image_data)
-        
-        # Save as JPEG in the register folder
-        file_path = os.path.join(REGISTER_FOLDER, f"{student_name}.jpg")
-        with open(file_path, 'wb') as f:
-            f.write(image_bytes)
-        
-        return f"✅ {student_name} registered successfully!"
-    
+        name = request.form['name']
+        photo = request.files['photo']
+        filename = f"{name}.jpg"
+        filepath = os.path.join(REGISTER_FOLDER, filename)
+        photo.save(filepath)
+        return f"✅ {name} registered successfully!"
     return render_template('register.html')
+
+@app.route('/attendance', methods=['GET', 'POST'])
+def attendance():
+    if request.method == 'POST':
+        photo = request.files['photo']
+        filename = photo.filename or "attendance.jpg"
+        unique_filename = f"{int(time.time())}_{filename}"
+        image_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+        photo.save(image_path)
+
+        # Load known encodings
+        with open(ENCODING_FILE, 'rb') as f:
+            known_encodings = pickle.load(f)
+
+        known_names = list(known_encodings.keys())
+        known_faces = list(known_encodings.values())
+
+        # Load uploaded image
+        unknown_image = face_recognition.load_image_file(image_path)
+        face_locations = face_recognition.face_locations(unknown_image)
+        face_encodings = face_recognition.face_encodings(unknown_image, face_locations)
+
+        if not face_encodings:
+            return "⚠️ No face detected. Please try again."
+
+        for face_encoding in face_encodings:
+            matches = face_recognition.compare_faces(known_faces, face_encoding)
+            if True in matches:
+                match_index = matches.index(True)
+                name = known_names[match_index]
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                # Log attendance
+                log = pd.DataFrame([{
+                    'Name': name,
+                    'Timestamp': timestamp,
+                    'Source': 'MobileCamera',
+                    'Image': unique_filename
+                }])
+
+                if os.path.exists(ATTENDANCE_LOG):
+                    log.to_csv(ATTENDANCE_LOG, mode='a', header=False, index=False)
+                else:
+                    log.to_csv(ATTENDANCE_LOG, index=False)
+
+                return f"✅ Attendance marked for {name}"
+
+        return "❌ Face not recognized. Please try again."
+
+    return render_template('attendance.html')

@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register (Camera Upload)</title>
+    <title>Mark Attendance</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,15 +11,12 @@
     </style>
 </head>
 <body>
-    <h2>Student Registration</h2>
+    <h2>Submit Attendance</h2>
     <form method="POST" enctype="multipart/form-data">
-        <label for="name">Enter Your Name:</label><br>
-        <input type="text" name="name" required><br><br>
-
-        <label>Take a Picture:</label><br>
+        <label>Take a Photo to Mark Attendance:</label><br>
         <input type="file" accept="image/*" capture="user" name="photo" required><br><br>
 
-        <button type="submit">Register</button>
+        <button type="submit">Submit Attendance</button>
     </form>
 </body>
 </html>
