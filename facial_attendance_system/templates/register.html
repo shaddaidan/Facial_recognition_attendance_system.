@@ -11,15 +11,19 @@
     </style>
 </head>
 <body>
-    <h2>Student Registration</h2>
-    <form method="POST" enctype="multipart/form-data">
-        <label for="name">Enter Your Name:</label><br>
-        <input type="text" name="name" required><br><br>
+<h2>Register Student</h2>
+<form method="POST" enctype="multipart/form-data">
+    <label for="student_id">Student ID:</label><br>
+    <input type="text" name="student_id" required><br><br>
 
-        <label>Take a Picture:</label><br>
-        <input type="file" accept="image/*" capture="user" name="photo" required><br><br>
+    <label for="student_name">Student Name:</label><br>
+    <input type="text" name="student_name" required><br><br>
 
-        <button type="submit">Register</button>
-    </form>
+    <label>Take a Picture:</label><br>
+    <input type="file" accept="image/*" capture="user" name="photo" required><br><br>
+
+    <button type="submit">Register</button>
+</form>
+
 </body>
 </html>

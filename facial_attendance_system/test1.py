@@ -27,11 +27,9 @@ def clean_image(image_path):
         image = Image.open(image_path)
         print(f"🖼 Original image mode: {image.mode}, size: {image.size}")
 
-        # Convert to RGB
         if image.mode != 'RGB':
             image = image.convert('RGB')
 
-        # Fix EXIF orientation
         try:
             for orientation in ExifTags.TAGS:
                 if ExifTags.TAGS[orientation] == 'Orientation':
@@ -48,15 +46,11 @@ def clean_image(image_path):
         except Exception as e:
             print("⚠️ No EXIF or failed to rotate:", e)
 
-        # Resize
         image.thumbnail((1024, 1024))
-
-        # Force overwrite
         image.save(image_path, format='JPEG')
         print(f"✅ Cleaned image saved: {image_path}")
     except Exception as e:
         print(f"❌ Error in clean_image: {e}")
-
 
 @app.route('/')
 def home():
@@ -71,19 +65,16 @@ def register():
         student_folder = os.path.join(REGISTER_FOLDER, student_id)
         os.makedirs(student_folder, exist_ok=True)
 
-        # Save photo temporarily
         temp_path = os.path.join(student_folder, f"{student_id}_temp.jpg")
         photo.save(temp_path)
 
         try:
-            # Clean and save final image
             final_image_path = os.path.join(student_folder, f"{student_id}.jpeg")
             clean_image(temp_path)
             os.rename(temp_path, final_image_path)
         except Exception as e:
             return f"❌ Error processing image: {e}"
 
-        # === Face encoding ===
         try:
             image = face_recognition.load_image_file(final_image_path)
             print(f"🧠 [REGISTER] Image shape for encoding: {image.shape}")
@@ -110,26 +101,19 @@ def register():
 @app.route('/attendance', methods=['GET', 'POST'])
 def attendance():
     if request.method == 'POST':
-        student_id = request.form['student_id']
         photo = request.files['photo']
+        student_id_input = request.form['student_id']
 
-        # === Save with timestamped name ===
         filename = photo.filename or "attendance.jpg"
         unique_filename = f"{int(time.time())}_{filename}"
         image_path = os.path.join(UPLOAD_FOLDER, unique_filename)
         photo.save(image_path)
 
-        # === Clean the uploaded image ===
         clean_image(image_path)
 
-        # === Load cleaned image and try to detect face ===
         try:
             unknown_image = face_recognition.load_image_file(image_path)
-            print(f"🧠 [ATTENDANCE] Image shape: {unknown_image.shape}")
-
             face_locations = face_recognition.face_locations(unknown_image)
-            print(f"🔍 [ATTENDANCE] Face locations: {face_locations}")
-
             face_encodings = face_recognition.face_encodings(unknown_image, face_locations)
         except Exception as e:
             return f"❌ Error processing image: {e}"
@@ -138,22 +122,23 @@ def attendance():
             return "⚠️ No face detected. Please try again with a clearer photo."
 
         unknown_encoding = face_encodings[0]
+        min_distance = float('inf')
+        matched_student_id = None
 
-        # === Locate student’s saved encoding ===
-        encoding_path = os.path.join(REGISTER_FOLDER, student_id, "face_encoding.pkl")
-        if not os.path.exists(encoding_path):
-            return f"❌ No registration found for student ID: {student_id}"
+        for student_id in os.listdir(REGISTER_FOLDER):
+            encoding_path = os.path.join(REGISTER_FOLDER, student_id, "face_encoding.pkl")
+            if os.path.exists(encoding_path):
+                with open(encoding_path, 'rb') as f:
+                    known_encoding = pickle.load(f)
+                distance = face_recognition.face_distance([known_encoding], unknown_encoding)[0]
+                if distance < 0.45 and distance < min_distance:
+                    min_distance = distance
+                    matched_student_id = student_id
 
-        with open(encoding_path, 'rb') as f:
-            known_encoding = pickle.load(f)
-
-        match = face_recognition.compare_faces([known_encoding], unknown_encoding)[0]
-        print(f"🧪 [ATTENDANCE] Match result for {student_id}: {match}")
-
-        if match:
+        if matched_student_id:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             log = pd.DataFrame([{
-                'Name': student_id,
+                'Name': matched_student_id,
                 'Timestamp': timestamp,
                 'Source': 'MobileCamera',
                 'Image': unique_filename
@@ -164,12 +149,11 @@ def attendance():
             else:
                 log.to_csv(ATTENDANCE_LOG, index=False)
 
-            return f"✅ Attendance marked for {student_id}"
+            return f"✅ Attendance marked for {matched_student_id}"
 
-        return "❌ Face did not match the registered image. Please try again."
+        return "❌ Face not recognized. Student not registered."
 
     return render_template('attendance.html')
-
 
 if __name__ == '__main__':
     print("✅ Flask is starting...")
